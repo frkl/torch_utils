@@ -26,10 +26,6 @@ nrepeat=params.nrepeat;
 ndims=4096;
 
 require 'nn'
-require 'optim'
-require 'torch'
-require 'nn'
-require 'math'
 require 'cunn'
 require 'cutorch'
 require 'loadcaffe'
