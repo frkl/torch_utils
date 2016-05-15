@@ -55,6 +55,8 @@ function RNN:forward(init_state,input,sizes)
 	return final_state,outputs;
 end
 --rnn backward
+--ds: gradient for end state. batch_size x state_size
+--doutput: gradients for each output at each timestep; or a dummy gradient for a single output 
 function RNN:backward(init_state,input,sizes,ds,doutputs)
 	local sizes_0=sizes:clone():fill(0);
 	sizes_0[{{2,sizes:size(1)}}]=sizes[{{1,sizes:size(1)-1}}];
@@ -101,7 +103,7 @@ function RNN:backward(init_state,input,sizes,ds,doutputs)
 		end
 		return dinit_state,dinput_embedding;
 	else
-		--Actually has output gradients
+		--Dummy outputs
 		local N=sizes:size(1);
 		local dstate=ds[{{1,sizes[N]}}];
 		local dinit_state=nil;
