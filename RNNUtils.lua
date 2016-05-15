@@ -105,7 +105,20 @@ function sequence_length(seq)
 	local v=seq:gt(0):sum(2):view(-1):long();
 	return v;
 end
-
+--generate bow representation for sequences
+function bag_of_words(seq,length,cutoff)
+	--cutoff: not using the entire vocabulary, but only words 1-cutoff
+	local n=seq:size(1);
+	local bow=torch.ByteTensor(n,cutoff):fill(0);
+	for i=1,n do
+		for j=1,length[i] do
+			if seq[i][j]>0 and seq[i][j]<=cutoff then
+				bow[i][seq[i][j]]=bow[i][seq[i][j]]+1;
+			end
+		end
+	end
+	return bow;
+end
 
 -------RNN UTIL FUNCTIONS-----------
 --Repeat an RNN block multiple times for testing
