@@ -119,7 +119,6 @@ end
 --         3) map_to_rnn: mapping from the sentence order of seq to sentence order of the sorted sentences
 --         4) map_to_sequence: mapping from the sorted sentences to the original sentence order of seq.
 --
---CPU only
 function sort_by_length_right_aligned(seq,gpu,seq_length)
 	gpu=gpu or false;
 	seq_length=seq_length or sequence_length(seq);
