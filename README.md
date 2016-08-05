@@ -9,6 +9,11 @@
   A self-contained somewhat-optimized variable length RNN implementation.
  
 
+* limited_mem_RNN.lua
+
+  A drop-in replacement of word_RNN that has O(T^0.5) memory complexity.
+ 
+
 * RNNUtils.lua
 
   Functions for sequence processing, RNN forward/backward.

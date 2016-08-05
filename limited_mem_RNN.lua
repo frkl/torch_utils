@@ -6,7 +6,7 @@ Variable length limited-memory RNN
 
 *  Implements my understanding of Chen's sqrt algorithm https://arxiv.org/abs/1604.06174. Sentence length N: memory complexity O(N^0.5), computational complexity O(4*N)
 *  The network uses only 1 LSTM unit so memory inefficiencies in the unit is minimized.  
-*  In practice I see backward being 60% the speed of backward of a full-memory RNN. Forward is almost full speed.
+*  On VQA questions I see forward-backward being 80% the speed of forward-backward of a full-memory RNN. On a synthetic benchmark forward-backward is 60% the speed of a full-memory RNN. Forward is almost full speed.
 
 *  There might be a bug somewhere though
 
@@ -518,7 +518,7 @@ function RNN.unit.lstm(nhinput,nh,noutput,n,dropout)
 		table.insert(mixed,h[i]);
 	end
 	local h_current=nn.JoinTable(1,1)(mixed);
-	local output=nn.Linear(nh,noutput)(nn.Dropout(dropout)(h[n]));
+	local output=nn.Linear(nh,noutput)(h[n]);
 	return nn.gModule({h_prev,input},{h_current,output});
 end
 
@@ -551,7 +551,7 @@ function RNN.unit.gru(nhinput,nh,noutput,n,dropout)
 		h[i]=nn.CAddTable()({nn.CMulTable()({forget_gate,data_chunk}),nn.CMulTable()({nn.AddConstant(1)(nn.MulConstant(-1)(forget_gate)),prev_h[i]})});
 	end
 	local h_current=nn.JoinTable(1,1)(h);
-	local output=nn.Linear(nh,noutput)(nn.Dropout(dropout)(h[n]));
+	local output=nn.Linear(nh,noutput)(h[n]);
 	return nn.gModule({h_prev,input},{h_current,output});
 end
 
@@ -585,7 +585,7 @@ function RNN.unit.gru_old(input_size,rnn_size,noutput,n,dropout)
       input_size_L = input_size
     else 
       x = outputs[(L-1)] 
-      if dropout > 0 then x = nn.Dropout(dropout)(x) end -- apply dropout, if any
+      if dropout > 0 then x = x end -- apply dropout, if any
       input_size_L = rnn_size
     end
     -- GRU tick
@@ -606,7 +606,7 @@ function RNN.unit.gru_old(input_size,rnn_size,noutput,n,dropout)
   end
 -- set up the decoder
   local top_h = outputs[#outputs]
-  if dropout > 0 then top_h = nn.Dropout(dropout)(top_h) end
+  if dropout > 0 then top_h = top_h end
   local proj = nn.Linear(rnn_size, noutput)(top_h)
 	
 	local h_new;
