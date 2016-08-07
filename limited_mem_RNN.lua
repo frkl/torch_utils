@@ -134,7 +134,11 @@ function sort_by_length_right_aligned(seq,gpu,seq_length)
 	local L=seq_length_sorted[1];
 	if L==0 then
 		--We got a batch of empty sentences. There's no words, no batch sizes, so there's nothing to do.
-		return {words=nil,batch_sizes=nil,map_to_rnn=sort_index,map_to_sequence=sort_index_inverse};
+		if gpu then
+			return {words=nil,batch_sizes=nil,map_to_rnn=sort_index:cuda(),map_to_sequence=sort_index_inverse:cuda()};
+		else
+			return {words=nil,batch_sizes=nil,map_to_rnn=sort_index,map_to_sequence=sort_index_inverse};
+		end
 	end
 	local words=torch.LongTensor(seq_length:sum());
 	local batch_sizes=torch.LongTensor(L);
@@ -167,7 +171,11 @@ function sort_by_length_left_aligned(seq,gpu,seq_length)
 	local L=seq_length_sorted[1];
 	if L==0 then
 		--We got a batch of empty sentences. There's no words, no batch sizes, so there's nothing to do.
-		return {words=nil,batch_sizes=nil,map_to_rnn=sort_index,map_to_sequence=sort_index_inverse};
+		if gpu then
+			return {words=nil,batch_sizes=nil,map_to_rnn=sort_index:cuda(),map_to_sequence=sort_index_inverse:cuda()};
+		else
+			return {words=nil,batch_sizes=nil,map_to_rnn=sort_index,map_to_sequence=sort_index_inverse};
+		end
 	end
 	local words=torch.LongTensor(seq_length:sum());
 	local batch_sizes=torch.LongTensor(L);
@@ -518,7 +526,7 @@ function RNN.unit.lstm(nhinput,nh,noutput,n,dropout)
 		table.insert(mixed,h[i]);
 	end
 	local h_current=nn.JoinTable(1,1)(mixed);
-	local output=nn.Linear(nh,noutput)(h[n]);
+	local output=nn.Linear(nh,noutput)(nn.Dropout(dropout)(h[n]));
 	return nn.gModule({h_prev,input},{h_current,output});
 end
 
@@ -551,7 +559,7 @@ function RNN.unit.gru(nhinput,nh,noutput,n,dropout)
 		h[i]=nn.CAddTable()({nn.CMulTable()({forget_gate,data_chunk}),nn.CMulTable()({nn.AddConstant(1)(nn.MulConstant(-1)(forget_gate)),prev_h[i]})});
 	end
 	local h_current=nn.JoinTable(1,1)(h);
-	local output=nn.Linear(nh,noutput)(h[n]);
+	local output=nn.Linear(nh,noutput)(nn.Dropout(dropout)(h[n]));
 	return nn.gModule({h_prev,input},{h_current,output});
 end
 
@@ -585,7 +593,7 @@ function RNN.unit.gru_old(input_size,rnn_size,noutput,n,dropout)
       input_size_L = input_size
     else 
       x = outputs[(L-1)] 
-      if dropout > 0 then x = x end -- apply dropout, if any
+      if dropout > 0 then x = nn.Dropout(dropout)(x) end -- apply dropout, if any
       input_size_L = rnn_size
     end
     -- GRU tick
@@ -606,7 +614,7 @@ function RNN.unit.gru_old(input_size,rnn_size,noutput,n,dropout)
   end
 -- set up the decoder
   local top_h = outputs[#outputs]
-  if dropout > 0 then top_h = top_h end
+  if dropout > 0 then top_h = nn.Dropout(dropout)(top_h) end
   local proj = nn.Linear(rnn_size, noutput)(top_h)
 	
 	local h_new;

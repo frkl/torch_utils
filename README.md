@@ -14,6 +14,11 @@
   A drop-in replacement of word_RNN that has O(T^0.5) memory complexity.
  
 
+* cudnn_RNN.lua
+
+  A cudnn wrapper for variable length sentences. It's somewhat a drop-in replacement of word_RNN for sentence encoding tasks with certain limitations.
+ 
+
 * RNNUtils.lua
 
   Functions for sequence processing, RNN forward/backward.

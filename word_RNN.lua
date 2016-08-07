@@ -118,7 +118,6 @@ end
 --         2) batch_sizes: batch size at each time step. Starts small and ends at batch_size for right-aligned sentences.
 --         3) map_to_rnn: mapping from the sentence order of seq to sentence order of the sorted sentences
 --         4) map_to_sequence: mapping from the sorted sentences to the original sentence order of seq.
---
 function sort_by_length_right_aligned(seq,gpu,seq_length)
 	gpu=gpu or false;
 	seq_length=seq_length or sequence_length(seq);
@@ -129,7 +128,11 @@ function sort_by_length_right_aligned(seq,gpu,seq_length)
 	local L=seq_length_sorted[1];
 	if L==0 then
 		--We got a batch of empty sentences. There's no words, no batch sizes, so there's nothing to do.
-		return {words=nil,batch_sizes=nil,map_to_rnn=sort_index,map_to_sequence=sort_index_inverse};
+		if gpu then
+			return {words=nil,batch_sizes=nil,map_to_rnn=sort_index:cuda(),map_to_sequence=sort_index_inverse:cuda()};
+		else
+			return {words=nil,batch_sizes=nil,map_to_rnn=sort_index,map_to_sequence=sort_index_inverse};
+		end
 	end
 	local words=torch.LongTensor(seq_length:sum());
 	local batch_sizes=torch.LongTensor(L);
@@ -162,7 +165,11 @@ function sort_by_length_left_aligned(seq,gpu,seq_length)
 	local L=seq_length_sorted[1];
 	if L==0 then
 		--We got a batch of empty sentences. There's no words, no batch sizes, so there's nothing to do.
-		return {words=nil,batch_sizes=nil,map_to_rnn=sort_index,map_to_sequence=sort_index_inverse};
+		if gpu then
+			return {words=nil,batch_sizes=nil,map_to_rnn=sort_index:cuda(),map_to_sequence=sort_index_inverse:cuda()};
+		else
+			return {words=nil,batch_sizes=nil,map_to_rnn=sort_index,map_to_sequence=sort_index_inverse};
+		end
 	end
 	local words=torch.LongTensor(seq_length:sum());
 	local batch_sizes=torch.LongTensor(L);
