@@ -45,7 +45,7 @@ Usage:
 
 require 'nn'
 require 'nngraph'
-RNN={};
+local RNN={};
 
 --Some util functions
 --Takes an index (y=x[index]) and return its inverse mapping (x=y[index])
@@ -234,60 +234,55 @@ function RNN:forward(init_state,input,sizes,s,e)
 	--Loop through timesteps and do forwards
 	local outputs={};
 	local final_state=init_state:clone();
-	local right_aligned=true;
-	local state=init_state[{{1,sizes[1]}}];
+	local state=init_state[{{1,sizes[1]}}]:clone();
 	local storage_ind=1;
 	for t=1,sizes:size(1) do
 		local tmp;
-		local cell_input;
 		--check whether the batch size is shrinking to detect left/right aligned sequences.
 		if t==1 or sizes[t]==sizes[t-1] then
 			--batch size doesn't change, just do forward.
 			tmp=self.deploy:forward({state,input_table[t]});
-			cell_input=state;
 		elseif sizes[t]>sizes[t-1] then
 			--batch size becomes larger. Sequence is right aligned.
 			--enlarge state so it fits the new batch size
-			local larger_state=state[{}];
-			larger_state:resizeAs(init_state[{{1,sizes[t]}}]);
-			larger_state[{{sizes[t-1]+1,sizes[t]}}]=init_state[{{sizes[t-1]+1,sizes[t]}}];
+			state:resizeAs(init_state[{{1,sizes[t]}}]);
+			state[{{1,sizes[t-1]}}]=self.deploy.output[1];
+			state[{{sizes[t-1]+1,sizes[t]}}]=init_state[{{sizes[t-1]+1,sizes[t]}}];
 			--forward
-			tmp=self.deploy:forward({larger_state,input_table[t]});
-			cell_input=larger_state;
+			tmp=self.deploy:forward({state,input_table[t]});
 		elseif sizes[t]<sizes[t-1] then
 			--batch size becomes smaller. Sequence is left aligned.
 			--shrink state so it fits the new batch size
-			right_aligned=false;
-			local smaller_state=state[{{1,sizes[t]}}];
+			state:resizeAs(init_state[{{1,sizes[t]}}]);
+			state[{{}}]=self.deploy.output[1][{{1,sizes[t]}}];
 			--copy the left overs to final state
-			final_state[{{sizes[t]+1,sizes[t-1]}}]=state[{{sizes[t]+1,sizes[t-1]}}];
+			final_state[{{sizes[t]+1,sizes[t-1]}}]=self.deploy.output[1][{{sizes[t]+1,sizes[t-1]}}];
 			--forward
-			tmp=self.deploy:forward({smaller_state,input_table[t]});
-			cell_input=smaller_state;
+			tmp=self.deploy:forward({state,input_table[t]});
 		end
-		state=tmp[1];
-		table.insert(outputs,tmp[2]:clone());
 		--store checkpoints according to plan
 		local reverse_storage_ind=linear_chunk+sqrt_chunk-storage_ind+1;
 		if t<=linear_chunk then
-			--print(string.format('Saving %d into %d',t,storage_ind))
+			print(string.format('Saving %d into %d',t,storage_ind))
 			if self.cell_inputs[storage_ind]==nil then
-				self.cell_inputs[storage_ind]=cell_input:clone();
+				self.cell_inputs[storage_ind]=state:clone();
 			else
-				self.cell_inputs[storage_ind]:resizeAs(cell_input);
-				self.cell_inputs[storage_ind][{{}}]=cell_input;
+				self.cell_inputs[storage_ind]:resizeAs(state);
+				self.cell_inputs[storage_ind][{{}}]=state;
 			end
 			storage_ind=storage_ind+1;
 		elseif t>linear_chunk and (t-linear_chunk==1 or sizes:size(1)-t==(reverse_storage_ind)*(reverse_storage_ind+1)/2-1) then
 			--print(string.format('Saving %d into %d',t,storage_ind))
 			if self.cell_inputs[storage_ind]==nil then
-				self.cell_inputs[storage_ind]=cell_input:clone();
+				self.cell_inputs[storage_ind]=state:clone();
 			else
-				self.cell_inputs[storage_ind]:resizeAs(cell_input);
-				self.cell_inputs[storage_ind][{{}}]=cell_input;
+				self.cell_inputs[storage_ind]:resizeAs(state);
+				self.cell_inputs[storage_ind][{{}}]=state;
 			end
 			storage_ind=storage_ind+1;
 		end
+		state[{{}}]=tmp[1];
+		table.insert(outputs,tmp[2]:clone());
 	end
 	final_state[{{1,sizes[sizes:size(1)]}}]=state;
 	return final_state,outputs;
@@ -342,11 +337,9 @@ function RNN:backward(init_state,input,sizes,dfinal_state,doutputs)
 	if sqrt_chunk>self.n then error('Insufficient RNN memory.') end
 	local linear_chunk=math.max(sizes:size(1)-sqrt_chunk*(sqrt_chunk+1)/2,0);
 	
-	
-	
 	--Loop through timesteps and do backwards	
 	local N=sizes:size(1);
-	local dstate=dfinal_state[{{1,sizes[N]}}];
+	local dstate=dfinal_state[{{1,sizes[N]}}]:clone();
 	local dinit_state=dfinal_state:clone();
 	local dinput_embedding=input:clone():fill(0);
 	local left_aligned=true;

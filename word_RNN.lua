@@ -39,7 +39,7 @@ Usage:
 
 require 'nn'
 require 'nngraph'
-RNN={};
+local RNN={};
 
 --Some util functions
 --Takes an index (y=x[index]) and return its inverse mapping (x=y[index])
@@ -128,11 +128,7 @@ function sort_by_length_right_aligned(seq,gpu,seq_length)
 	local L=seq_length_sorted[1];
 	if L==0 then
 		--We got a batch of empty sentences. There's no words, no batch sizes, so there's nothing to do.
-		if gpu then
-			return {words=nil,batch_sizes=nil,map_to_rnn=sort_index:cuda(),map_to_sequence=sort_index_inverse:cuda()};
-		else
-			return {words=nil,batch_sizes=nil,map_to_rnn=sort_index,map_to_sequence=sort_index_inverse};
-		end
+		return {words=nil,batch_sizes=nil,map_to_rnn=sort_index,map_to_sequence=sort_index_inverse};
 	end
 	local words=torch.LongTensor(seq_length:sum());
 	local batch_sizes=torch.LongTensor(L);
@@ -165,11 +161,7 @@ function sort_by_length_left_aligned(seq,gpu,seq_length)
 	local L=seq_length_sorted[1];
 	if L==0 then
 		--We got a batch of empty sentences. There's no words, no batch sizes, so there's nothing to do.
-		if gpu then
-			return {words=nil,batch_sizes=nil,map_to_rnn=sort_index:cuda(),map_to_sequence=sort_index_inverse:cuda()};
-		else
-			return {words=nil,batch_sizes=nil,map_to_rnn=sort_index,map_to_sequence=sort_index_inverse};
-		end
+		return {words=nil,batch_sizes=nil,map_to_rnn=sort_index,map_to_sequence=sort_index_inverse};
 	end
 	local words=torch.LongTensor(seq_length:sum());
 	local batch_sizes=torch.LongTensor(L);
@@ -223,27 +215,39 @@ function RNN:forward(init_state,input,sizes)
 		--check whether the batch size is shrinking to detect left/right aligned sequences.
 		if t==1 or sizes[t]==sizes[t-1] then
 			--batch size doesn't change, just do forward.
-			tmp=self.deploy[t]:forward({state,input_table[t]});
-			self.cell_inputs[t]=state;
+			if self.cell_inputs[t]==nil then
+				self.cell_inputs[t]=state:clone();
+			else
+				self.cell_inputs[t]:resizeAs(state);
+				self.cell_inputs[t][{{}}]=state;
+			end
+			tmp=self.deploy[t]:forward({self.cell_inputs[t],input_table[t]});
 		elseif sizes[t]>sizes[t-1] then
 			--batch size becomes larger. Sequence is right aligned.
 			--enlarge state so it fits the new batch size
-			local larger_state=state[{}];
-			larger_state:resizeAs(init_state[{{1,sizes[t]}}]);
-			larger_state[{{sizes[t-1]+1,sizes[t]}}]=init_state[{{sizes[t-1]+1,sizes[t]}}];
+			if self.cell_inputs[t]==nil then
+				self.cell_inputs[t]=init_state[{{1,sizes[t]}}]:clone():zero();
+			else
+				self.cell_inputs[t]:resizeAs(init_state[{{1,sizes[t]}}]);
+			end
+			self.cell_inputs[t][{{1,sizes[t-1]}}]=state[{}];
+			self.cell_inputs[t][{{sizes[t-1]+1,sizes[t]}}]=init_state[{{sizes[t-1]+1,sizes[t]}}];
 			--forward
-			tmp=self.deploy[t]:forward({larger_state,input_table[t]});
-			self.cell_inputs[t]=larger_state;
+			tmp=self.deploy[t]:forward({self.cell_inputs[t],input_table[t]});
 		elseif sizes[t]<sizes[t-1] then
 			--batch size becomes smaller. Sequence is left aligned.
 			--shrink state so it fits the new batch size
 			right_aligned=false;
-			local smaller_state=state[{{1,sizes[t]}}];
+			if self.cell_inputs[t]==nil then
+				self.cell_inputs[t]=state[{{1,sizes[t]}}]:clone();
+			else
+				self.cell_inputs[t]:resizeAs(state[{{1,sizes[t]}}]);
+				self.cell_inputs[t][{{}}]=state[{{1,sizes[t]}}];
+			end
 			--copy the left overs to final state
 			final_state[{{sizes[t]+1,sizes[t-1]}}]=state[{{sizes[t]+1,sizes[t-1]}}];
 			--forward
-			tmp=self.deploy[t]:forward({smaller_state,input_table[t]});
-			self.cell_inputs[t]=smaller_state;
+			tmp=self.deploy[t]:forward({self.cell_inputs[t],input_table[t]});
 		end
 		state=tmp[1];
 		table.insert(outputs,tmp[2]);
@@ -293,7 +297,7 @@ function RNN:backward(init_state,input,sizes,dfinal_state,doutputs)
 	
 	--Loop through timesteps and do backwards	
 	local N=sizes:size(1);
-	local dstate=dfinal_state[{{1,sizes[N]}}];
+	local dstate=dfinal_state[{{1,sizes[N]}}]:clone();
 	local dinit_state=dfinal_state:clone();
 	--local dinput_embedding=input:clone():fill(0);
 	local dinput_embedding={};
@@ -305,26 +309,27 @@ function RNN:backward(init_state,input,sizes,dfinal_state,doutputs)
 		if t==1 or sizes[t]==sizes[t-1] then
 			--It's not shrinking, so just do backward
 			tmp=self.deploy[t]:backward({self.cell_inputs[t],input_table[t]},{dstate,doutputs_table[t]});
-			dstate=tmp[1];
+			dstate[{{}}]=tmp[1];
 		elseif sizes[t]>sizes[t-1] then
 			--It's shrinking, the sequence is right aligned.
 			left_aligned=false;
 			tmp=self.deploy[t]:backward({self.cell_inputs[t],input_table[t]},{dstate,doutputs_table[t]});
 			--We need to shrink dstate to fit the previous cell
-			dstate=tmp[1][{{1,sizes[t-1]}}];
+			dstate:resizeAs(tmp[1][{{1,sizes[t-1]}}]);
+			dstate[{{}}]=tmp[1][{{1,sizes[t-1]}}];
 			--And copy the left overs to the initial state
 			dinit_state[{{sizes[t-1]+1,sizes[t]}}]=tmp[1][{{sizes[t-1]+1,sizes[t]}}];
 		elseif sizes[t]<sizes[t-1] then
 			--It's expanding, the sequence is left aligned.
 			tmp=self.deploy[t]:backward({self.cell_inputs[t],input_table[t]},{dstate,doutputs_table[t]});
 			--We need to expand dstate to fit the previous cell
-			dstate=tmp[1][{}];
 			dstate:resizeAs(dfinal_state[{{1,sizes[t-1]}}]);
+			dstate[{{1,sizes[t]}}]=tmp[1][{}];
 			dstate[{{sizes[t]+1,sizes[t-1]}}]=dfinal_state[{{sizes[t]+1,sizes[t-1]}}];
 		end
 		--Slot the input embedding gradients
 		--dinput_embedding[{{offset-sizes[t]+1,offset}}]=tmp[2];
-		dinput_embedding[t]=tmp[2];
+		dinput_embedding[t]=tmp[2]:clone();
 		offset=offset-sizes[t];
 	end
 	dinit_state[{{1,sizes[1]}}]=dstate;
