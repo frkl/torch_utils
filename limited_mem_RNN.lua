@@ -263,7 +263,7 @@ function RNN:forward(init_state,input,sizes,s,e)
 		--store checkpoints according to plan
 		local reverse_storage_ind=linear_chunk+sqrt_chunk-storage_ind+1;
 		if t<=linear_chunk then
-			print(string.format('Saving %d into %d',t,storage_ind))
+			--print(string.format('Saving %d into %d',t,storage_ind))
 			if self.cell_inputs[storage_ind]==nil then
 				self.cell_inputs[storage_ind]=state:clone();
 			else
