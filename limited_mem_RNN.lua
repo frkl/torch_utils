@@ -144,7 +144,7 @@ function sort_by_length_right_aligned(seq,gpu,seq_length)
 	local batch_sizes=torch.LongTensor(L);
 	local offset=0;
 	for i=1,L do
-		local ind=seq_length_sorted:ge(L-i+1);
+		local ind=seq_length_sorted:ge(L-i+1):long();
 		local n=torch.sum(ind);
 		batch_sizes[i]=n;
 		words[{{offset+1,offset+n}}]=seq_sorted[{{1,n},MAX_LENGTH-L+i}];
@@ -181,7 +181,7 @@ function sort_by_length_left_aligned(seq,gpu,seq_length)
 	local batch_sizes=torch.LongTensor(L);
 	local offset=0;
 	for i=1,L do
-		local ind=seq_length_sorted:ge(i);
+		local ind=seq_length_sorted:ge(i):long();
 		local n=torch.sum(ind);
 		batch_sizes[i]=n;
 		words[{{offset+1,offset+n}}]=seq_sorted[{{1,n},i}];
